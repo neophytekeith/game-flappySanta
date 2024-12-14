@@ -1,123 +1,130 @@
 import streamlit as st
-from PIL import Image, ImageDraw
+import pygame
 import random
-import time
 
-# Initialize session state variables
-if "santa_y" not in st.session_state:
-    st.session_state.santa_y = 300
-    st.session_state.gravity = 0
-    st.session_state.pipes = []
-    st.session_state.score = 0
-    st.session_state.game_over = False
-    st.session_state.high_score = 0
+# Initialize the Pygame library
+pygame.init()
 
-# Constants
-WIDTH = 350
-HEIGHT = 622
-PIPE_WIDTH = 52
-PIPE_HEIGHT = 320
+# Set game window size
+WIDTH, HEIGHT = 400, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Flappy Santa")
+
+# Define colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+
+# Game constants
+GRAVITY = 0.5
+FLAP_STRENGTH = -10
+PIPE_WIDTH = 70
 PIPE_GAP = 150
-GRAVITY = 2
-FLAP_STRENGTH = -40
+PIPE_VELOCITY = 3
+SANTA_WIDTH = 50
+SANTA_HEIGHT = 50
 
-# Load assets
-background = Image.open("bg.png").resize((WIDTH, HEIGHT))
-floor = Image.open("snow.png").resize((WIDTH, 100))
-santa = Image.open("santa.png").resize((50, 50))
-pipe_img = Image.open("pipe.png").resize((PIPE_WIDTH, PIPE_HEIGHT))
+# Define the Santa class
+class Santa(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((SANTA_WIDTH, SANTA_HEIGHT))
+        self.image.fill(RED)
+        self.rect = self.image.get_rect()
+        self.rect.center = (WIDTH // 4, HEIGHT // 2)
+        self.velocity = 0
 
+    def update(self):
+        self.velocity += GRAVITY
+        self.rect.y += self.velocity
+
+        # Prevent Santa from going off the screen
+        if self.rect.top < 0:
+            self.rect.top = 0
+        if self.rect.bottom > HEIGHT:
+            self.rect.bottom = HEIGHT
+
+    def flap(self):
+        self.velocity = FLAP_STRENGTH
+
+# Define the Pipe class
+class Pipe(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.width = PIPE_WIDTH
+        self.height = random.randint(100, HEIGHT - PIPE_GAP - 100)
+        self.image = pygame.Surface((self.width, self.height))
+        self.image.fill(GREEN)
+        self.rect = self.image.get_rect()
+        self.rect.x = WIDTH
+        self.rect.bottom = self.height
+        self.rect.top = self.height - PIPE_GAP
+
+    def update(self):
+        self.rect.x -= PIPE_VELOCITY
+        if self.rect.right < 0:
+            self.kill()
+
+# Initialize the game
 def reset_game():
-    """Reset the game state."""
-    st.session_state.santa_y = HEIGHT // 2
-    st.session_state.gravity = 0
-    st.session_state.pipes = []
-    st.session_state.score = 0
+    st.session_state.santa = Santa()
+    st.session_state.santa_group = pygame.sprite.Group(st.session_state.santa)
+    st.session_state.pipes = pygame.sprite.Group()
     st.session_state.game_over = False
+    st.session_state.score = 0
 
-def create_pipe():
-    """Create new pipes."""
-    y_pos = random.randint(150, HEIGHT - PIPE_GAP - 100)
-    return {"top": y_pos - PIPE_HEIGHT, "bottom": y_pos + PIPE_GAP, "x": WIDTH}
-
-def move_pipes():
-    """Move pipes to the left and generate new ones."""
+# Game loop function
+def game_loop():
+    santa = st.session_state.santa
+    santa_group = st.session_state.santa_group
     pipes = st.session_state.pipes
-    for pipe in pipes:
-        pipe["x"] -= 5
-    # Remove pipes out of screen
-    st.session_state.pipes = [pipe for pipe in pipes if pipe["x"] > -PIPE_WIDTH]
-    # Add new pipe
-    if not pipes or pipes[-1]["x"] < WIDTH - 200:
-        st.session_state.pipes.append(create_pipe())
+    game_over = st.session_state.game_over
 
-def check_collision():
-    """Check for collision with pipes or floor/ceiling."""
-    santa_y = st.session_state.santa_y
-    for pipe in st.session_state.pipes:
-        if (santa_y < pipe["top"] + PIPE_HEIGHT or santa_y > pipe["bottom"]) and 50 < pipe["x"] < 100:
+    if not game_over:
+        # Check for mouse click/tap (simulate flap)
+        if st.button('Flap'):
+            santa.flap()
+
+        # Add new pipes
+        if random.randint(1, 50) == 1:
+            new_pipe = Pipe()
+            pipes.add(new_pipe)
+
+        # Update game objects
+        santa_group.update()
+        pipes.update()
+
+        # Check for collisions
+        if pygame.sprite.spritecollideany(santa, pipes) or santa.rect.top <= 0 or santa.rect.bottom >= HEIGHT:
             st.session_state.game_over = True
-            return
-    if santa_y <= 0 or santa_y >= HEIGHT - 50:  # Floor/ceiling collision
-        st.session_state.game_over = True
 
-def update_score():
-    """Update the score when passing through pipes."""
-    for pipe in st.session_state.pipes:
-        if pipe["x"] == 50:  # Passed pipe
-            st.session_state.score += 1
-            st.session_state.high_score = max(st.session_state.high_score, st.session_state.score)
+        # Update the score
+        st.session_state.score += 1
 
-def render_frame():
-    """Render a single frame of the game."""
-    # Create a new image for the frame
-    frame = background.copy()
-    draw = ImageDraw.Draw(frame)
+        # Drawing the game objects
+        screen.fill(WHITE)
+        santa_group.draw(screen)
+        pipes.draw(screen)
 
-    # Draw pipes
-    for pipe in st.session_state.pipes:
-        # Draw top pipe (flipped)
-        top_pipe = pipe_img.transpose(Image.FLIP_TOP_BOTTOM)
-        frame.paste(top_pipe, (pipe["x"], pipe["top"]))
-        # Draw bottom pipe
-        frame.paste(pipe_img, (pipe["x"], pipe["bottom"]))
+        # Show the score
+        font = pygame.font.SysFont(None, 36)
+        score_text = font.render(f"Score: {st.session_state.score}", True, BLACK)
+        screen.blit(score_text, (10, 10))
 
-    # Draw Santa
-    frame.paste(santa, (50, st.session_state.santa_y), santa)
+    else:
+        # Display Game Over
+        font = pygame.font.SysFont(None, 72)
+        game_over_text = font.render("Game Over", True, BLACK)
+        screen.blit(game_over_text, (WIDTH // 4, HEIGHT // 3))
 
-    # Draw floor
-    frame.paste(floor, (0, HEIGHT - 100))
+    # Update the display
+    pygame.display.update()
 
-    return frame
+# Streamlit UI
+if 'game_over' not in st.session_state:
+    reset_game()
 
-# Game loop
-if not st.session_state.game_over:
-    # Check for mouse click/tap (simulate flap)
-    mouse_click = st.mouse_events()
-    for event in mouse_click:
-        if event["event"] == "click":
-            st.session_state.gravity = FLAP_STRENGTH  # Flap when clicked
-
-    # Move pipes and check for collisions
-    move_pipes()
-    check_collision()
-    update_score()
-
-    # Gravity and movement
-    st.session_state.gravity += GRAVITY
-    st.session_state.santa_y += st.session_state.gravity
-
-    # Render and display frame
-    frame = render_frame()
-    st.image(frame, use_container_width=True)  # Updated parameter
-
-else:
-    # Game Over Screen
-    st.write("Game Over!")
-    st.write(f"Score: {st.session_state.score}")
-    st.write(f"High Score: {st.session_state.high_score}")
-    if st.button("Restart"):
-        reset_game()
-
-# Simulate animation by updating every 0.03 seconds
-time.sleep(0.03)
+# Main game loop
+while True:
+    game_loop()

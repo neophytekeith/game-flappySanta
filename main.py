@@ -1,5 +1,5 @@
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageDraw
 import random
 import time
 
@@ -22,10 +22,10 @@ GRAVITY = 2
 FLAP_STRENGTH = -40
 
 # Load assets
-background = Image.open("bg.png")
-floor = Image.open("snow.png")
-santa = Image.open("santa.png")
-pipe_img = Image.open("pipe.png")
+background = Image.open("bg.png").resize((WIDTH, HEIGHT))
+floor = Image.open("snow.png").resize((WIDTH, 100))
+santa = Image.open("santa.png").resize((50, 50))
+pipe_img = Image.open("pipe.png").resize((PIPE_WIDTH, PIPE_HEIGHT))
 
 def reset_game():
     """Reset the game state."""
@@ -68,30 +68,42 @@ def update_score():
             st.session_state.score += 1
             st.session_state.high_score = max(st.session_state.high_score, st.session_state.score)
 
+def render_frame():
+    """Render a single frame of the game."""
+    # Create a new image for the frame
+    frame = background.copy()
+    draw = ImageDraw.Draw(frame)
+
+    # Draw pipes
+    for pipe in st.session_state.pipes:
+        # Draw top pipe (flipped)
+        top_pipe = pipe_img.transpose(Image.FLIP_TOP_BOTTOM)
+        frame.paste(top_pipe, (pipe["x"], pipe["top"]))
+        # Draw bottom pipe
+        frame.paste(pipe_img, (pipe["x"], pipe["bottom"]))
+
+    # Draw Santa
+    frame.paste(santa, (50, st.session_state.santa_y), santa)
+
+    # Draw floor
+    frame.paste(floor, (0, HEIGHT - 100))
+
+    return frame
+
 # Game loop
 if not st.session_state.game_over:
-    # Display game
-    st.image(background, width=WIDTH)
-
     # Move pipes and check for collisions
     move_pipes()
     check_collision()
     update_score()
 
-    # Display pipes
-    for pipe in st.session_state.pipes:
-        st.image(pipe_img, width=PIPE_WIDTH, use_column_width=False, caption="", output_format="PNG",
-                 output_height=PIPE_HEIGHT, x=pipe["x"], y=pipe["top"])
-        st.image(pipe_img, width=PIPE_WIDTH, use_column_width=False, caption="", output_format="PNG",
-                 output_height=PIPE_HEIGHT, x=pipe["x"], y=pipe["bottom"])
-
     # Gravity and movement
     st.session_state.gravity += GRAVITY
     st.session_state.santa_y += st.session_state.gravity
 
-    # Display Santa
-    st.image(santa, width=50, use_column_width=False, caption="", output_format="PNG",
-             output_height=50, x=50, y=st.session_state.santa_y)
+    # Render and display frame
+    frame = render_frame()
+    st.image(frame, use_column_width=True)
 
     # Jump button
     if st.button("Flap!"):

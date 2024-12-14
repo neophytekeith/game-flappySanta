@@ -103,7 +103,7 @@ if not st.session_state.game_over:
 
     # Render and display frame
     frame = render_frame()
-    st.image(frame, use_column_width=True)
+    st.image(frame, use_container_width=True)  # Updated parameter
 
     # Jump button
     if st.button("Flap!"):
@@ -117,6 +117,5 @@ else:
     if st.button("Restart"):
         reset_game()
 
-# Update the page to simulate animation
+# Simulate animation by updating every 0.03 seconds
 time.sleep(0.03)
-st.experimental_rerun()

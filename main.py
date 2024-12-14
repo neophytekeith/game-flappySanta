@@ -92,6 +92,12 @@ def render_frame():
 
 # Game loop
 if not st.session_state.game_over:
+    # Check for mouse click/tap (simulate flap)
+    mouse_click = st.mouse_events()
+    for event in mouse_click:
+        if event["event"] == "click":
+            st.session_state.gravity = FLAP_STRENGTH  # Flap when clicked
+
     # Move pipes and check for collisions
     move_pipes()
     check_collision()
@@ -104,10 +110,6 @@ if not st.session_state.game_over:
     # Render and display frame
     frame = render_frame()
     st.image(frame, use_container_width=True)  # Updated parameter
-
-    # Jump button
-    if st.button("Flap!"):
-        st.session_state.gravity = FLAP_STRENGTH
 
 else:
     # Game Over Screen
